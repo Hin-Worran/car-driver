@@ -1,19 +1,27 @@
+/**
+ * version: 1.0
+ * function: drive a robot with obstacle avoidance system 
+ * author: hin
+ * date: 2021/8/14 17:34
+ */	
+
 #include <Servo.h>
-//pin脚定义
+// pin脚定义
 const int pinLB = 5; //左退
 const int pinLF = 4; //左前
-const int pinRB = 3; //右退
-const int pinRF = 2; //右前
+const int pinRB = 10; //右退
+const int pinRF = 9; //右前
 
 int inputPin = A1;//超声波Echo引脚
 int outputPin = A0; //超声波Trig引脚
 int servoPin = 12; //舵机信息号引脚
 
-const int SensorMid = 6; //中感測器輸入腳
-const int SensorLeft = 7; //左感測器輸入腳
-const int SensorRight = 8; //右感測器輸入腳
+// const int SensorMid = NULL; //中感測器輸入腳
+// const int SensorLeft = 7; //左感測器輸入腳
+// const int SensorRight = 8; //右感測器輸入腳
 const int buttonPin = 10; //绿色按钮
 
+//马达脚
 int MotorRPWM = 11;
 int MotorLPWM = 6;
 
@@ -26,14 +34,16 @@ void turnAround();
 void setMotorPWM(int, int);
 void pause();
 void findOtherWay();
-void getState();
+void getThisState();
+void saveState();
+void startIt();
 int askDistance(int angle);
 
 //变量定义
 Servo myservo;//定义舵机
-int basicPWM = 105;
-int modifiedPWM = 18; //解决左右轮速差问题
-int turningTime = 250; //转弯时间
+int basicPWM = 100;
+int modifiedPWM = 20; //用以解决左右轮速差问题
+int turningTime = 350; //转弯时间
 int turningPoint = 30;  //转弯的临界距离，单位厘米
 int lastState[2], thisState[2]; //[0]:时间，[1]:距离
 bool isStart; //启动状态
@@ -41,6 +51,7 @@ bool isStart; //启动状态
 void setup()
 {
   Serial.begin(9600); //波特率
+
   //设pinMode
   pinMode(pinLB, OUTPUT);
   pinMode(pinLF, OUTPUT);
@@ -48,43 +59,47 @@ void setup()
   pinMode(pinRF, OUTPUT);
   pinMode(inputPin, INPUT);
   pinMode(outputPin, OUTPUT);
-  pinMode(SensorLeft, INPUT);
-  pinMode(SensorRight, INPUT);
-  pinMode(SensorMid, INPUT);
+  // pinMode(SensorLeft, INPUT);
+  // pinMode(SensorRight, INPUT);
+  // pinMode(SensorMid, INPUT);
   pinMode(buttonPin, INPUT);
   pinMode(MotorLPWM,  OUTPUT); //PWM
   pinMode(MotorRPWM,  OUTPUT);
+
   myservo.attach(servoPin);//定义舵机信息号引脚
 
   //初始化
-  getState();
-  for (int i = 0; i < 2; i++) {
-    lastState[i] = thisState[i];
-  }
+  getThisState(); //获取当前状态
+  saveState();  //暂存当前状态
   isStart = false;  //初始时启动状态为false
+  attachInterrupt(digitalPinToInterrupt(2),startIt,RISING); //绑定中断
 }
 
 
 void loop() {
-  myservo.write(90);  //摆正
+  myservo.write(90);  //舵机摆正
   //启动判断
   if (isStart) {
-    getState(); //获取当前状态
-    Serial.print(thisState[0]);
-    Serial.print("\t");
-    Serial.print(thisState[1]);
-    Serial.print("\n");
+    getThisState(); //获取当前状态
+
+    //打印当前状态
+    // Serial.print(thisState[0]);
+    // Serial.print("\t");
+    // Serial.print(thisState[1]);
+    // Serial.print("\n");
+
     if ( thisState[1] > turningPoint) {
       forward();  //前方有空间，前进
-      getState();
+      getThisState();
       //每隔1.5秒判断
       if (thisState[0] - lastState[0] > 1500) {
         //1.5s内移动距离小于10cm
         if (abs(thisState[1] - lastState[1]) < 10) {
+          pause();
           backward(); //后退
           delay(250);
-          pause();
-          findOtherWay(); //找路
+          pause();  //停下来
+          findOtherWay(); //重新找路
         }
         //更新状态
         for (int i = 0; i < 2; i++) {
@@ -97,17 +112,31 @@ void loop() {
       findOtherWay();
     }
   }
-  else if (digitalRead(buttonPin) == HIGH) {
-    isStart = !isStart; //切换启动状态
+}
+/**
+ * 单击按钮启动
+ */
+void startIt(){
+  if(isStart==false){
+    isStart = true;
   }
 }
 
 /*
    获取当前状态
 */
-void getState() {
+void getThisState() {
   thisState[0] = millis();
   thisState[1] = askDistance(90);
+}
+
+/*
+暂存当前状态
+*/
+void saveState() {
+  for (int i = 0; i < 2; i++) {
+    lastState[i] = thisState[i];
+  }
 }
 
 /*
@@ -157,6 +186,7 @@ void turnLeft() {
   digitalWrite(pinLF, LOW);
   setMotorPWM(basicPWM, modifiedPWM);
   delay(turningTime);
+  pause();
 }
 
 /*
@@ -169,6 +199,7 @@ void turnRight() {
   digitalWrite(pinLF, HIGH);
   setMotorPWM(basicPWM, modifiedPWM);
   delay(turningTime);
+  pause();
 }
 
 /*
@@ -181,6 +212,7 @@ void turnAround() {
   digitalWrite(pinLF, LOW);
   setMotorPWM(basicPWM, modifiedPWM);
   delay(turningTime * 2);
+  pause();
 }
 
 /*
