@@ -43,7 +43,7 @@ void trackRoad();
 
 //变量定义
 Servo myservo; //定义舵机
-int basicPWM = 100;
+int basicPWM = 120;
 int modifiedPWM = 0;                      //用以解决左右轮速差问题
 int turningTime = 350;                    //转弯时间
 int turningPoint = 30;                    //转弯的临界距离，单位厘米
