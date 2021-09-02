@@ -28,12 +28,14 @@ int MotorLPWM = 5;
 
 //变量定义
 Servo myservo; //定义舵机
-int basicPWM = 120;
-int modifiedPWM = 0;        //用以解决左右轮速差问题
+int basicPWM = 135;
+int modifiedPWM = 1;        //用以解决左右轮速差问题,值将加在左马达上
 int turningTime = 350;      //转直角弯时间
 int turningPoint = 10;      //转弯的临界距离，单位厘米
-int turningPoint_side = 14; //侧面的转弯临界距离
+int turningPoint_side = 25; //侧面的转弯临界距离
 bool isStart = false;       //启动状态
+
+
 
 /**
  * 单击按钮
@@ -300,6 +302,10 @@ void observe()
     pause();
     delay(100);
     turnRight();
+    delay(100);
+    forward();
+    delay(500);
+    pause();
     // interrupts();
   }
   else if (askDistance(90) > turningPoint) // if front reachable, no need to do anything
@@ -347,6 +353,45 @@ void backToRoad()
   }
 }
 
+/**
+ * 循迹模式
+ */
+int moshi_xj()
+{
+  int SL = digitalRead(sensorLeft);
+  int SR = digitalRead(sensorRight);
+  int SM = digitalRead(sensorMid);
+  int dT = 80;  //delay time of running
+  double v = 0.4; //运行周期比
+
+  if (SL == LOW && SR == LOW && SM == HIGH) //左右白，中间黑，前进
+  {
+    forward();
+    delay(dT);
+    pause();
+  }
+  if (SL == LOW && SR == HIGH  ) //左白右黑,快速右转
+  {
+    turnAngle(10);
+  }
+  if (SL == HIGH && SR == LOW) //左黑右白,快速左转
+  {
+    turnAngle(-10);
+  }
+  if (SL == HIGH && SR == HIGH && SM == HIGH ) //都是黑，停止
+  {
+    pause();//停止
+  }
+  if (SL == LOW && SR == LOW && SM == LOW) //全白，前进
+  {
+    forward();
+    delay(dT);
+    pause();
+  }
+  delay((int)(dT*(1.0/v-1.0)));   //控制运行时间与停止时间的比值来控制速度
+
+}
+
 void setup()
 {
   Serial.begin(9600); //波特率
@@ -380,11 +425,15 @@ void loop()
   //启动判断
   if (isStart)
   {
-    observe();
+    moshi_xj();
+    // trackRoad();
+    // observe();
     // if (askDistance(90) > turningPoint)
     // {
     //   trackRoad(); //循迹
     // forward(); //前方有空间，前进
+
+    /*
     if (isStucked()) //卡车处理
     {
       pause();
@@ -393,6 +442,7 @@ void loop()
       pause();        //停下来
       findOtherWay(); //重新找路
     }
+    */
   }
   // else
   // {
