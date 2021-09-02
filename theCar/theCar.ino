@@ -29,10 +29,11 @@ int MotorLPWM = 5;
 //变量定义
 Servo myservo; //定义舵机
 int basicPWM = 120;
-int modifiedPWM = 0;   //用以解决左右轮速差问题
-int turningTime = 350; //转直角弯时间
-int turningPoint = 10; //转弯的临界距离，单位厘米
-bool isStart = false;  //启动状态
+int modifiedPWM = 0;        //用以解决左右轮速差问题
+int turningTime = 350;      //转直角弯时间
+int turningPoint = 10;      //转弯的临界距离，单位厘米
+int turningPoint_side = 14; //侧面的转弯临界距离
+bool isStart = false;       //启动状态
 
 /**
  * 单击按钮
@@ -62,11 +63,23 @@ void setMotorPWM(int basicPWM, int modifiedPWM = 0)
 */
 void findOtherWay()
 {
-  if (askDistance(0) > turningPoint)
+  if (isStucked())
+  {
+    backward();
+    delay(100);
+    pause();
+  }
+  if (askDistance(90) > turningPoint)
+  {
+    forward();
+    delay(100);
+    pause();
+  }
+  else if (askDistance(0) > turningPoint_side)
   {
     turnRight(); //若右边有空间，右转
   }
-  else if (askDistance(180) > turningPoint)
+  else if (askDistance(180) > turningPoint_side)
   {
     turnLeft(); //若左边有空间，左转
   }
@@ -213,30 +226,36 @@ void trackRoad()
   // Serial.print("R:");
   // Serial.println(SR);
 
-  if (SL == LOW && SR == LOW && SM == HIGH) //左右白，中间黑，前进
-  {
-    forward();
-    delay(delayTime);
-    pause();
-  }
-  else if (SL == LOW && SR == HIGH) //左白右黑,快速右转
+  if (SR == HIGH)
   {
     turnAngle(30);
   }
-  else if (SL == HIGH && SR == LOW) //左黑右白,快速左转
-  {
-    turnAngle(-30);
-  }
-  else if (SL == HIGH && SR == HIGH && SM == HIGH) //都是黑，停止
-  {
-    pause();        //停止
-    findOtherWay(); //遇到十字路口，找路
-  }
-  else if (SL == LOW && SR == LOW && SM == LOW) //全白，前进
+  else if (SR == LOW && SM == HIGH) //左右白，中间黑，前进
   {
     forward();
     delay(delayTime);
     pause();
+  }
+  // else if (SL == LOW && SR == HIGH && SM == LOW) //左白右黑,快速右转
+  // {
+  //   turnAngle(30);
+  // }
+  else if (SL == HIGH && SR == LOW && SM == LOW) //左黑右白,快速左转
+  {
+    turnAngle(-30);
+  }
+  // else if (SL == HIGH && SR == HIGH && SM == HIGH) //都是黑，停止
+  // {
+  //   pause();        //停止
+  //   findOtherWay(); //遇到十字路口，找路
+  // }
+  else if (SL == LOW && SR == LOW && SM == LOW) //全白，前进
+  {
+    // forward();
+    // delay(delayTime);
+    // pause();
+    pause();
+    findOtherWay();
   }
 }
 
@@ -249,9 +268,9 @@ bool isStucked()
   static int lastDistance = askDistance(90);  //历史距离
   unsigned long thisMillis = millis();        //当前时间
   int thisDistance = askDistance(90);         //当前距离
-  if (thisMillis - lastMillis > 1000)         //每隔1秒进行判断
+  if (thisMillis - lastMillis > 1500)         //每隔1.5秒进行判断
   {
-    if (abs(thisDistance - lastDistance) < 1) //若1秒移动距离小于5cm，则认为stucked
+    if (abs(thisDistance - lastDistance) < 1) //若1秒移动距离小于1cm，则认为stucked
     {
       lastDistance = thisDistance; //update status
       lastMillis = thisMillis;
@@ -267,6 +286,64 @@ bool isStucked()
   else
   {
     return false;
+  }
+}
+
+/**
+ * observe and choose a way to go
+ */
+void observe()
+{
+  if (askDistance(0) > turningPoint_side) // if right side reachable, turn right
+  {
+    // noInterrupts();
+    pause();
+    delay(100);
+    turnRight();
+    // interrupts();
+  }
+  else if (askDistance(90) > turningPoint) // if front reachable, no need to do anything
+  {
+    forward();
+  }
+  else if (askDistance(180) > turningPoint_side) // if left side reachable, turn left
+  {
+    // noInterrupts();
+    pause();
+    delay(100);
+    turnLeft();
+    // interrupts();
+  }
+  else // if no direction is reachable turn around
+  {
+    // noInterrupts();
+    pause();
+    delay(100);
+    backward();
+    delay(200);
+    pause();
+    delay(100);
+    turnAround();
+    // interrupts();
+  }
+}
+
+/**
+ * drive the car back to road
+ */
+void backToRoad()
+{
+  pause();
+  while (digitalRead(sensorMid) != HIGH)
+  {
+    if (digitalRead(sensorLeft) == HIGH)
+    {
+      turnAngle(-30);
+    }
+    else if (digitalRead(sensorRight) == HIGH)
+    {
+      turnAngle(30);
+    }
   }
 }
 
@@ -291,11 +368,10 @@ void setup()
   myservo.attach(servoPin); //定义舵机信息号引脚
 
   //初始化
-  isStart = false;                                                        //初始时启动状态为false
+  isStart = false;                                                         //初始时启动状态为false
   myservo.write(90);                                                      //舵机摆正
   attachInterrupt(digitalPinToInterrupt(buttonPin), clickButton, RISING); //绑定按钮中断
-  attachInterrupt(digitalPinToInterrupt(sensorMid), pause, RISING);       //红外传感器中断
-
+  // attachInterrupt(digitalPinToInterrupt(sensorMid), backToRoad, FALLING); //红外传感器中断
   Serial.println("setup done");
 }
 
@@ -304,23 +380,23 @@ void loop()
   //启动判断
   if (isStart)
   {
-    if (askDistance(90) > turningPoint)
-    {
-      trackRoad(); //循迹
-      // forward(); //前方有空间，前进
-      if (isStucked())    //卡车处理
-      {
-        pause();
-        backward(); //后退
-        delay(250);
-        pause();        //停下来
-        findOtherWay(); //重新找路
-      }
-    }
-    else
+    observe();
+    // if (askDistance(90) > turningPoint)
+    // {
+    //   trackRoad(); //循迹
+    // forward(); //前方有空间，前进
+    if (isStucked()) //卡车处理
     {
       pause();
-      findOtherWay();
+      backward(); //后退
+      delay(250);
+      pause();        //停下来
+      findOtherWay(); //重新找路
     }
   }
+  // else
+  // {
+  //   pause();
+  //   findOtherWay();
+  // }
 }
