@@ -28,14 +28,12 @@ int MotorLPWM = 5;
 
 //变量定义
 Servo myservo; //定义舵机
-int basicPWM = 135;
+int basicPWM = 150;
 int modifiedPWM = 1;        //用以解决左右轮速差问题,值将加在左马达上
-int turningTime = 350;      //转直角弯时间
+int turningTime = 250;      //转直角弯时间
 int turningPoint = 10;      //转弯的临界距离，单位厘米
 int turningPoint_side = 25; //侧面的转弯临界距离
 bool isStart = false;       //启动状态
-
-
 
 /**
  * 单击按钮
@@ -216,50 +214,50 @@ int askDistance(int angle)
 /**
  * 循迹
  */
-void trackRoad()
-{
-  int SL = digitalRead(sensorLeft);
-  int SR = digitalRead(sensorRight);
-  int SM = digitalRead(sensorMid);
-  int delayTime = 200;
+// void trackRoad()
+// {
+//   int SL = digitalRead(sensorLeft);
+//   int SR = digitalRead(sensorRight);
+//   int SM = digitalRead(sensorMid);
+//   int delayTime = 200;
 
-  // Serial.print("L:");
-  // Serial.println(SL);
-  // Serial.print("R:");
-  // Serial.println(SR);
+//   // Serial.print("L:");
+//   // Serial.println(SL);
+//   // Serial.print("R:");
+//   // Serial.println(SR);
 
-  if (SR == HIGH)
-  {
-    turnAngle(30);
-  }
-  else if (SR == LOW && SM == HIGH) //左右白，中间黑，前进
-  {
-    forward();
-    delay(delayTime);
-    pause();
-  }
-  // else if (SL == LOW && SR == HIGH && SM == LOW) //左白右黑,快速右转
-  // {
-  //   turnAngle(30);
-  // }
-  else if (SL == HIGH && SR == LOW && SM == LOW) //左黑右白,快速左转
-  {
-    turnAngle(-30);
-  }
-  // else if (SL == HIGH && SR == HIGH && SM == HIGH) //都是黑，停止
-  // {
-  //   pause();        //停止
-  //   findOtherWay(); //遇到十字路口，找路
-  // }
-  else if (SL == LOW && SR == LOW && SM == LOW) //全白，前进
-  {
-    // forward();
-    // delay(delayTime);
-    // pause();
-    pause();
-    findOtherWay();
-  }
-}
+//   if (SR == HIGH)
+//   {
+//     turnAngle(30);
+//   }
+//   else if (SR == LOW && SM == HIGH) //左右白，中间黑，前进
+//   {
+//     forward();
+//     delay(delayTime);
+//     pause();
+//   }
+//   // else if (SL == LOW && SR == HIGH && SM == LOW) //左白右黑,快速右转
+//   // {
+//   //   turnAngle(30);
+//   // }
+//   else if (SL == HIGH && SR == LOW && SM == LOW) //左黑右白,快速左转
+//   {
+//     turnAngle(-30);
+//   }
+//   // else if (SL == HIGH && SR == HIGH && SM == HIGH) //都是黑，停止
+//   // {
+//   //   pause();        //停止
+//   //   findOtherWay(); //遇到十字路口，找路
+//   // }
+//   else if (SL == LOW && SR == LOW && SM == LOW) //全白，前进
+//   {
+//     // forward();
+//     // delay(delayTime);
+//     // pause();
+//     pause();
+//     findOtherWay();
+//   }
+// }
 
 /**
  * 判断是否卡住了
@@ -292,46 +290,100 @@ bool isStucked()
 }
 
 /**
+ * 判断左右距离调整车头方向
+ */
+void turningAdjust()
+{
+  int rightFrontSpace = askDistance(40);
+  int leftFrontSpace = askDistance(140);
+  int adjustAngle = 30;
+  int count = 5; //微调的最大次数
+  //判断左右距离调整车头方向
+  while (abs(leftFrontSpace - rightFrontSpace) > 10 && count > 0)
+  {
+    if (leftFrontSpace > rightFrontSpace)
+    {
+      turnAngle(-adjustAngle);
+    }
+    else if (leftFrontSpace < rightFrontSpace)
+    {
+      turnAngle(adjustAngle);
+    }
+    leftFrontSpace = askDistance(140);
+    rightFrontSpace = askDistance(40);
+    count--;
+  }
+}
+
+/**
  * observe and choose a way to go
  */
 void observe()
 {
-  if (askDistance(0) > turningPoint_side) // if right side reachable, turn right
+  int rightSpace = askDistance(0);
+  int rightFrontSpace = askDistance(40);
+  int frontSpace = askDistance(90);
+  // int leftFrontSpace = askDistance(140);
+  int leftSpace = askDistance(180);
+  if (rightSpace > turningPoint_side && rightFrontSpace < rightSpace) // if right side reachable, turn right
   {
     // noInterrupts();
-    pause();
-    delay(100);
     turnRight();
-    delay(100);
-    forward();
-    delay(500);
+    delay(10);
+    forward(); //转弯后前进一小段距离，避免转回去
+    delay(150);
     pause();
+    // leftFrontSpace = askDistance(140);
+    // rightFrontSpace = askDistance(40);
+    turningAdjust();
+    // int count = 5; //微调的最大次数
+    // //判断左右距离调整车头方向
+    // while (abs(leftFrontSpace - rightFrontSpace) > 10 && count > 0)
+    // {
+    //   if (leftFrontSpace > rightFrontSpace)
+    //   {
+    //     turnAngle(-20);
+    //   }
+    //   else if (leftFrontSpace < rightFrontSpace)
+    //   {
+    //     turnAngle(20);
+    //   }
+    //   leftFrontSpace = askDistance(140);
+    //   rightFrontSpace = askDistance(40);
+    //   count--;
+    // }
     // interrupts();
+  }
+  else if (frontSpace < turningPoint && rightSpace < turningPoint_side && leftSpace < turningPoint_side)
+  {
+    turnAround();
+    turningAdjust();
   }
   else if (askDistance(90) > turningPoint) // if front reachable, no need to do anything
   {
-    forward();
+    // forward();
+    return;
   }
-  else if (askDistance(180) > turningPoint_side) // if left side reachable, turn left
-  {
-    // noInterrupts();
-    pause();
-    delay(100);
-    turnLeft();
-    // interrupts();
-  }
-  else // if no direction is reachable turn around
-  {
-    // noInterrupts();
-    pause();
-    delay(100);
-    backward();
-    delay(200);
-    pause();
-    delay(100);
-    turnAround();
-    // interrupts();
-  }
+  // else if (askDistance(180) > turningPoint_side) // if left side reachable, turn left
+  // {
+  //   // noInterrupts();
+  //   pause();
+  //   delay(100);
+  //   turnLeft();
+  //   // interrupts();
+  // }
+  // else // if no direction is reachable turn around
+  // {
+  //   // noInterrupts();
+  //   pause();
+  //   delay(100);
+  //   backward();
+  //   delay(200);
+  //   pause();
+  //   delay(100);
+  //   turnAround();
+  //   // interrupts();
+  // }
 }
 
 /**
@@ -356,13 +408,14 @@ void backToRoad()
 /**
  * 循迹模式
  */
-int moshi_xj()
+void trackRoad()
 {
   int SL = digitalRead(sensorLeft);
   int SR = digitalRead(sensorRight);
   int SM = digitalRead(sensorMid);
-  int dT = 80;  //delay time of running
-  double v = 0.4; //运行周期比
+  int dT = 120; //delay time of running
+  int adjustAngle = 20;
+  double v = 1; //运行周期比
 
   if (SL == LOW && SR == LOW && SM == HIGH) //左右白，中间黑，前进
   {
@@ -370,17 +423,20 @@ int moshi_xj()
     delay(dT);
     pause();
   }
-  if (SL == LOW && SR == HIGH  ) //左白右黑,快速右转
+  if (SL == LOW && SR == HIGH) //左白右黑,快速右转
   {
-    turnAngle(10);
+    turnAngle(adjustAngle);
   }
   if (SL == HIGH && SR == LOW) //左黑右白,快速左转
   {
-    turnAngle(-10);
+    turnAngle(-adjustAngle);
   }
-  if (SL == HIGH && SR == HIGH && SM == HIGH ) //都是黑，停止
+  if (SL == HIGH && SR == HIGH && SM == HIGH) //都是黑，停止
   {
-    pause();//停止
+    // pause();//停止
+    forward();
+    delay(dT * 0.5);
+    pause();
   }
   if (SL == LOW && SR == LOW && SM == LOW) //全白，前进
   {
@@ -388,8 +444,7 @@ int moshi_xj()
     delay(dT);
     pause();
   }
-  delay((int)(dT*(1.0/v-1.0)));   //控制运行时间与停止时间的比值来控制速度
-
+  delay((int)(dT * (1.0 / v - 1.0))); //控制运行时间与停止时间的比值来控制速度
 }
 
 void setup()
@@ -413,7 +468,7 @@ void setup()
   myservo.attach(servoPin); //定义舵机信息号引脚
 
   //初始化
-  isStart = false;                                                         //初始时启动状态为false
+  // isStart = false;                                                        //初始时启动状态为false
   myservo.write(90);                                                      //舵机摆正
   attachInterrupt(digitalPinToInterrupt(buttonPin), clickButton, RISING); //绑定按钮中断
   // attachInterrupt(digitalPinToInterrupt(sensorMid), backToRoad, FALLING); //红外传感器中断
@@ -425,9 +480,9 @@ void loop()
   //启动判断
   if (isStart)
   {
-    moshi_xj();
+    observe();
+    trackRoad();
     // trackRoad();
-    // observe();
     // if (askDistance(90) > turningPoint)
     // {
     //   trackRoad(); //循迹
